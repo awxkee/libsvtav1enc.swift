@@ -5,6 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "libSvtAv1Enc",
+    platforms: [.iOS(.v11), .macOS(.v12), .macCatalyst(.v14)],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         .library(
