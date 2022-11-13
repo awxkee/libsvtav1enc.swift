@@ -24,14 +24,8 @@ struct SvtMetadataArray;
 
 // API Version
 #define SVT_AV1_VERSION_MAJOR 1
-#define SVT_AV1_VERSION_MINOR 0
+#define SVT_AV1_VERSION_MINOR 3
 #define SVT_AV1_VERSION_PATCHLEVEL 0
-
-#ifndef SVT_VERSION_MAJOR
-#define SVT_VERSION_MAJOR SVT_AV1_VERSION_MAJOR
-#define SVT_VERSION_MINOR SVT_AV1_VERSION_MINOR
-#define SVT_VERSION_PATCHLEVEL SVT_AV1_VERSION_PATCHLEVEL
-#endif
 
 #define SVT_AV1_CHECK_VERSION(major, minor, patch)                            \
     (SVT_AV1_VERSION_MAJOR > (major) ||                                       \
@@ -110,11 +104,11 @@ typedef struct EbBufferHeaderType {
     int64_t  pts;
 
     // pic info
-    uint32_t qp;
-    uint32_t pic_type;
-    uint64_t luma_sse;
-    uint64_t cr_sse;
-    uint64_t cb_sse;
+    uint32_t         qp;
+    EbAv1PictureType pic_type;
+    uint64_t         luma_sse;
+    uint64_t         cr_sse;
+    uint64_t         cb_sse;
     // pic flags
     uint32_t flags;
 
@@ -159,12 +153,6 @@ typedef enum EbAv1SeqProfile {
     PROFESSIONAL_PROFILE = 2
 } EbAv1SeqProfile;
 
-typedef enum AomBitDepth {
-    AOM_BITS_8  = 8, /**<  8 bits */
-    AOM_BITS_10 = 10, /**< 10 bits */
-    AOM_BITS_12 = 12, /**< 12 bits */
-} AomBitDepth;
-
 // For 8-bit and 10-bit packed inputs and outputs, the luma, cb, and cr fields should be used
 //   for the three input picture planes.  However, for 10-bit unpacked planes the
 //   lumaExt, cbExt, and crExt fields should be used hold the extra 2-bits of
@@ -194,11 +182,6 @@ typedef struct EbSvtIOFormat //former EbSvtEncInput
     EbColorFormat color_fmt;
     EbBitDepth    bit_depth;
 } EbSvtIOFormat;
-
-typedef struct BitstreamLevel {
-    uint8_t major;
-    uint8_t minor;
-} BitstreamLevel;
 
 typedef struct EbOperatingParametersInfo {
     /*!<Specifies the time interval between the arrival of the first bit in the
@@ -238,7 +221,7 @@ typedef struct EbAV1OperatingPoint {
 
 typedef struct EbColorConfig {
     /*!< bit depth */
-    uint32_t bit_depth;
+    EbBitDepth bit_depth;
 
     /*!< 1: Indicates that the video does not contain U and V color planes.
      *   0: Indicates that the video contains Y, U, and V color planes. */
@@ -305,28 +288,50 @@ typedef struct EbTimingInfo {
 
 } EbTimingInfo;
 
+// structure to be allocated at the sample application and passed to the library
+// on a per picture basis through the p_app_private field in the EbBufferHeaderType structure
+// this structure and the data inside would be casted, validated, then copied at the
+// svt_av1_enc_send_picture API call
+typedef enum {
+    PRIVATE_DATA, // data to be passed through and written to the bitstream
+    //FILM_GRAIN_PARAM,        // passing film grain parameters per picture
+    REF_FRAME_SCALING_EVENT, // reference frame scaling data per picture
+    PRIVATE_DATA_TYPES // end of private data types
+} PrivDataType;
+typedef struct EbPrivDataNode {
+    PrivDataType           node_type;
+    void                  *data; // pointer to data structure e.g. EbRefFrameScale or AomFilmGrain
+    uint32_t               size; // size of data being sent for the library to know how much to copy
+    struct EbPrivDataNode *next; // pointer to the next node, NULL if done.
+} EbPrivDataNode;
+typedef struct EbRefFrameScale {
+    uint8_t  scale_mode; // scaling mode, support for RESIZE_NONE, RESIZE_FIXED and RESIZE_RANDOM
+    uint32_t scale_denom; // scaling denominator for non-key frame, from 8~16
+    uint32_t scale_kf_denom; // scaling denominator for key frame, from 8~16
+} EbRefFrameScale;
+
 /**
 CPU FLAGS
 */
-typedef uint64_t CPU_FLAGS;
-#define CPU_FLAGS_MMX (1 << 0)
-#define CPU_FLAGS_SSE (1 << 1)
-#define CPU_FLAGS_SSE2 (1 << 2)
-#define CPU_FLAGS_SSE3 (1 << 3)
-#define CPU_FLAGS_SSSE3 (1 << 4)
-#define CPU_FLAGS_SSE4_1 (1 << 5)
-#define CPU_FLAGS_SSE4_2 (1 << 6)
-#define CPU_FLAGS_AVX (1 << 7)
-#define CPU_FLAGS_AVX2 (1 << 8)
-#define CPU_FLAGS_AVX512F (1 << 9)
-#define CPU_FLAGS_AVX512CD (1 << 10)
-#define CPU_FLAGS_AVX512DQ (1 << 11)
-#define CPU_FLAGS_AVX512ER (1 << 12)
-#define CPU_FLAGS_AVX512PF (1 << 13)
-#define CPU_FLAGS_AVX512BW (1 << 14)
-#define CPU_FLAGS_AVX512VL (1 << 15)
-#define CPU_FLAGS_ALL ((CPU_FLAGS_AVX512VL << 1) - 1)
-#define CPU_FLAGS_INVALID (1ULL << (sizeof(CPU_FLAGS) * 8ULL - 1ULL))
+typedef uint64_t EbCpuFlags;
+#define EB_CPU_FLAGS_MMX (1 << 0)
+#define EB_CPU_FLAGS_SSE (1 << 1)
+#define EB_CPU_FLAGS_SSE2 (1 << 2)
+#define EB_CPU_FLAGS_SSE3 (1 << 3)
+#define EB_CPU_FLAGS_SSSE3 (1 << 4)
+#define EB_CPU_FLAGS_SSE4_1 (1 << 5)
+#define EB_CPU_FLAGS_SSE4_2 (1 << 6)
+#define EB_CPU_FLAGS_AVX (1 << 7)
+#define EB_CPU_FLAGS_AVX2 (1 << 8)
+#define EB_CPU_FLAGS_AVX512F (1 << 9)
+#define EB_CPU_FLAGS_AVX512CD (1 << 10)
+#define EB_CPU_FLAGS_AVX512DQ (1 << 11)
+#define EB_CPU_FLAGS_AVX512ER (1 << 12)
+#define EB_CPU_FLAGS_AVX512PF (1 << 13)
+#define EB_CPU_FLAGS_AVX512BW (1 << 14)
+#define EB_CPU_FLAGS_AVX512VL (1 << 15)
+#define EB_CPU_FLAGS_ALL ((EB_CPU_FLAGS_AVX512VL << 1) - 1)
+#define EB_CPU_FLAGS_INVALID (1ULL << (sizeof(EbCpuFlags) * 8ULL - 1ULL))
 
 #ifdef __cplusplus
 }
