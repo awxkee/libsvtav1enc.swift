@@ -24,14 +24,12 @@ struct SvtMetadataArray;
 
 // API Version
 #define SVT_AV1_VERSION_MAJOR 1
-#define SVT_AV1_VERSION_MINOR 3
+#define SVT_AV1_VERSION_MINOR 7
 #define SVT_AV1_VERSION_PATCHLEVEL 0
 
-#define SVT_AV1_CHECK_VERSION(major, minor, patch)                            \
-    (SVT_AV1_VERSION_MAJOR > (major) ||                                       \
-     (SVT_AV1_VERSION_MAJOR == (major) && SVT_AV1_VERSION_MINOR > (minor)) || \
-     (SVT_AV1_VERSION_MAJOR == (major) && SVT_AV1_VERSION_MINOR == (minor) && \
-      SVT_AV1_VERSION_PATCHLEVEL >= (patch)))
+#define SVT_AV1_CHECK_VERSION(major, minor, patch)                                                               \
+    (SVT_AV1_VERSION_MAJOR > (major) || (SVT_AV1_VERSION_MAJOR == (major) && SVT_AV1_VERSION_MINOR > (minor)) || \
+     (SVT_AV1_VERSION_MAJOR == (major) && SVT_AV1_VERSION_MINOR == (minor) && SVT_AV1_VERSION_PATCHLEVEL >= (patch)))
 
 #if defined(_WIN32)
 #define EB_HELPER_EXPORT __declspec(dllexport)
@@ -79,7 +77,7 @@ typedef enum EbAv1PictureType {
 
 /** The Bool type is intended to be used to represent a true or a false
 value when passing parameters to and from the eBrisk API.  The
-Bool is a 32 bit quantity and is aligned on a 32 bit word boundary.
+Bool is an 8 bit quantity.
 */
 typedef uint8_t Bool;
 #define FALSE 0
@@ -147,11 +145,7 @@ typedef enum EbErrorType {
 } EbErrorType;
 
 /* AV1 bistream profile (seq_profile syntax element) */
-typedef enum EbAv1SeqProfile {
-    MAIN_PROFILE         = 0,
-    HIGH_PROFILE         = 1,
-    PROFESSIONAL_PROFILE = 2
-} EbAv1SeqProfile;
+typedef enum EbAv1SeqProfile { MAIN_PROFILE = 0, HIGH_PROFILE = 1, PROFESSIONAL_PROFILE = 2 } EbAv1SeqProfile;
 
 // For 8-bit and 10-bit packed inputs and outputs, the luma, cb, and cr fields should be used
 //   for the three input picture planes.  However, for 10-bit unpacked planes the
@@ -165,9 +159,12 @@ typedef struct EbSvtIOFormat //former EbSvtEncInput
     uint8_t *cr;
 
     // Hosts LSB 2 bits of 10bit input/output when the compressed 10bit format is used
-    uint8_t *luma_ext;
-    uint8_t *cb_ext;
-    uint8_t *cr_ext;
+#if !SVT_AV1_CHECK_VERSION(1, 5, 0)
+    /* DEPRECATED: to be removed in 1.5.0. */
+    void *luma_ext;
+    void *cb_ext;
+    void *cr_ext;
+#endif
 
     uint32_t y_stride;
     uint32_t cr_stride;
@@ -176,8 +173,8 @@ typedef struct EbSvtIOFormat //former EbSvtEncInput
     uint32_t width;
     uint32_t height;
 
-    uint32_t origin_x;
-    uint32_t origin_y;
+    uint32_t org_x;
+    uint32_t org_y;
 
     EbColorFormat color_fmt;
     EbBitDepth    bit_depth;
@@ -296,6 +293,7 @@ typedef enum {
     PRIVATE_DATA, // data to be passed through and written to the bitstream
     //FILM_GRAIN_PARAM,        // passing film grain parameters per picture
     REF_FRAME_SCALING_EVENT, // reference frame scaling data per picture
+    ROI_MAP_EVENT, // ROI map data per picture
     PRIVATE_DATA_TYPES // end of private data types
 } PrivDataType;
 typedef struct EbPrivDataNode {
@@ -309,7 +307,20 @@ typedef struct EbRefFrameScale {
     uint32_t scale_denom; // scaling denominator for non-key frame, from 8~16
     uint32_t scale_kf_denom; // scaling denominator for key frame, from 8~16
 } EbRefFrameScale;
-
+typedef struct SvtAv1RoiMapEvt {
+    uint64_t                start_picture_number;
+    uint8_t                *b64_seg_map;
+    int16_t                 seg_qp[8]; // 8: MAX_SEGMENTS
+    int8_t                  max_seg_id;
+    struct SvtAv1RoiMapEvt *next;
+} SvtAv1RoiMapEvt;
+typedef struct SvtAv1RoiMap {
+    uint32_t         evt_num;
+    SvtAv1RoiMapEvt *evt_list;
+    SvtAv1RoiMapEvt *cur_evt;
+    int16_t         *qp_map;
+    char            *buf;
+} SvtAv1RoiMap;
 /**
 CPU FLAGS
 */

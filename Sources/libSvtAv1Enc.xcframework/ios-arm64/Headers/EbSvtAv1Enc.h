@@ -28,7 +28,7 @@ extern "C" {
  * has been modified, and reset anytime the major API version has
  * been changed. Used to keep track if a field has been added or not.
  */
-#define SVT_AV1_ENC_ABI_VERSION 6
+#define SVT_AV1_ENC_ABI_VERSION 8
 
 //***HME***
 
@@ -43,7 +43,6 @@ extern "C" {
 #endif
 #endif /* ATTRIBUTE_PACKED */
 typedef enum ATTRIBUTE_PACKED {
-    ENC_MRS        = -2, // Highest quality research mode (slowest)
     ENC_MR         = -1, //Research mode with higher quality than M0
     ENC_M0         = 0,
     ENC_M1         = 1,
@@ -65,8 +64,7 @@ typedef enum ATTRIBUTE_PACKED {
 #define DEFAULT -1
 
 #define EB_BUFFERFLAG_EOS 0x00000001 // signals the last packet of the stream
-#define EB_BUFFERFLAG_SHOW_EXT \
-    0x00000002 // signals that the packet contains a show existing frame at the end
+#define EB_BUFFERFLAG_SHOW_EXT 0x00000002 // signals that the packet contains a show existing frame at the end
 #define EB_BUFFERFLAG_HAS_TD 0x00000004 // signals that the packet contains a TD
 #define EB_BUFFERFLAG_IS_ALT_REF 0x00000008 // signals that the packet contains an ALT_REF frame
 #define EB_BUFFERFLAG_ERROR_MASK \
@@ -113,8 +111,6 @@ struct EbSvtAv1MasteringDisplayInfo {
 typedef struct PredictionStructureConfigEntry {
     uint32_t temporal_layer_index;
     uint32_t decode_order;
-    int32_t  ref_list0[REF_LIST_MAX_DEPTH];
-    int32_t  ref_list1[REF_LIST_MAX_DEPTH];
 } PredictionStructureConfigEntry;
 
 // super-res modes
@@ -198,6 +194,24 @@ typedef enum SvtAv1RcMode {
     SVT_AV1_RC_MODE_CBR        = 2, // constant bit rate
 } SvtAv1RcMode;
 
+typedef enum SvtAv1FrameUpdateType {
+    SVT_AV1_KF_UPDATE,
+    SVT_AV1_LF_UPDATE,
+    SVT_AV1_GF_UPDATE,
+    SVT_AV1_ARF_UPDATE,
+    SVT_AV1_OVERLAY_UPDATE,
+    SVT_AV1_INTNL_OVERLAY_UPDATE, // Internal Overlay Frame
+    SVT_AV1_INTNL_ARF_UPDATE, // Internal Altref Frame
+    SVT_AV1_FRAME_UPDATE_TYPES
+} SvtAv1FrameUpdateType;
+
+typedef struct SvtAv1FrameScaleEvts {
+    uint32_t  evt_num;
+    uint64_t *start_frame_nums;
+    uint32_t *resize_kf_denoms;
+    uint32_t *resize_denoms;
+} SvtAv1FrameScaleEvts;
+
 // Will contain the EbEncApi which will live in the EncHandle class
 // Only modifiable during config-time.
 typedef struct EbSvtAv1EncConfiguration {
@@ -235,10 +249,11 @@ typedef struct EbSvtAv1EncConfiguration {
      *
      * Default is 1. */
     SvtAv1IntraRefreshType intra_refresh_type;
+
     /* Number of hierarchical layers used to construct GOP.
      * Minigop size = 2^HierarchicalLevels.
      *
-     * Default is 3. */
+     * Default is 5 upt to M12 4, for M13. */
     uint32_t hierarchical_levels;
 
     /* Prediction structure used to construct GOP. There are two main structures
@@ -316,17 +331,12 @@ typedef struct EbSvtAv1EncConfiguration {
      */
     EbColorFormat encoder_color_format;
 
-#if !SVT_AV1_CHECK_VERSION(1, 4, 0)
-    /* DEPRECATED: to be removed in 1.4.0. */
-    uint32_t compressed_ten_bit_format;
-#endif
-
     /**
-     * @brief Enable writing of HDR metadata in the bitstream
+     * @brief Currently unused.
      *
-     * Default is false.
+     * Default is 0.
      */
-    Bool high_dynamic_range_input;
+    uint8_t high_dynamic_range_input;
 
     /**
      * @brief Bitstream profile to use.
@@ -433,8 +443,8 @@ typedef struct EbSvtAv1EncConfiguration {
      * Default is 0. */
     uint32_t max_bit_rate;
 
-#if !SVT_AV1_CHECK_VERSION(1, 4, 0)
-    /* DEPRECATED: to be removed in 1.4.0. */
+#if !SVT_AV1_CHECK_VERSION(1, 5, 0)
+    /* DEPRECATED: to be removed in 1.5.0. */
     uint32_t vbv_bufsize;
 #endif
 
@@ -634,6 +644,7 @@ typedef struct EbSvtAv1EncConfiguration {
     *
     * Default is -1. */
     int enable_restoration_filtering;
+
     /* motion field motion vector
     *
     *  Default is -1. */
@@ -701,7 +712,7 @@ typedef struct EbSvtAv1EncConfiguration {
 
     Bool enable_overlays;
     /**
-     * @brief Tune for a particular metric; 0: VQ, 1: PSNR
+     * @brief Tune for a particular metric; 0: VQ, 1: PSNR, 2: SSIM.
      *
      * Default is 1.
      */
@@ -715,30 +726,16 @@ typedef struct EbSvtAv1EncConfiguration {
     uint8_t superres_kf_qthres;
     uint8_t superres_auto_search_type;
 
-    /**
-     * @brief API signal containing the manual prediction structure parameters.
-     * Only used when enable_manual_pred_struct is enabled. This list is copied
-     * into internal buffers after svt_av1_enc_set_parameter().
-     */
+#if !SVT_AV1_CHECK_VERSION(1, 5, 0)
+    /* DEPRECATED: to be removed in 1.5.0. */
     PredictionStructureConfigEntry pred_struct[1 << (MAX_HIERARCHICAL_LEVEL - 1)];
 
-    /**
-     * @brief API signal to overwrite the encoder's default prediction structure.
-     *
-     * Default is false.
-     */
+    /* DEPRECATED: to be removed in 1.5.0. */
     Bool enable_manual_pred_struct;
 
-    /**
-     * @brief API signal specifying the size (number of entries) of the manual prediction structure buffer.
-     * Only checked and used when enable_manual_pred_struct is enabled.
-     *
-     * Min is 1.
-     * Max is 32.
-     * Default is 0.
-     */
+    /* DEPRECATED: to be removed in 1.5.0. */
     int32_t manual_pred_struct_entry_num;
-
+#endif
     /* Decoder-speed-targeted encoder optimization level (produce bitstreams that can be decoded faster).
     * 0: No decoder speed optimization
     * 1: Decoder speed optimization enabled (fast decode)
@@ -886,6 +883,52 @@ typedef struct EbSvtAv1EncConfiguration {
      * Default is 0.
      */
     Bool gop_constraint_rc;
+
+    /**
+     * @brief scale factors for lambda value for different frame update types
+     * factor >> 7 (/ 128) is the actual value in float
+     */
+    int32_t lambda_scale_factors[SVT_AV1_FRAME_UPDATE_TYPES];
+
+    /* Dynamic gop
+    *
+    * 0 = disable Dynamic GoP
+    * 1 = enable Dynamic GoP
+    *  Default is 1. */
+    Bool enable_dg;
+
+    /**
+     * @brief startup_mg_size
+     *
+     * When enabled, a MG with specified size will be inserted after the key frame.
+     * The MG size is determined by 2^startup_mg_size.
+     *
+     * 0: off
+     * 2: set hierarchical levels to 2 (MG size 4)
+     * 3: set hierarchical levels to 3 (MG size 8)
+     * 4: set hierarchical levels to 4 (MG size 16)
+     * Default is 0.
+     */
+    uint8_t startup_mg_size;
+
+    /* @brief reference scaling events for random access mode (resize-mode = 4)
+     *
+     * evt_num:          total count of events
+     * start_frame_nums: array of scaling start frame numbers
+     * resize_kf_denoms: array of scaling denominators of key-frame
+     * resize_denoms:    array of scaling denominators of non-key-frame
+     */
+    SvtAv1FrameScaleEvts frame_scale_evts;
+
+    /*Add 64 Byte Padding to Struct to avoid changing the size of the public configuration struct*/
+    /* ROI map
+    *
+    * 0 = disable ROI
+    * 1 = enable ROI
+    *  Default is 0. */
+    Bool    enable_roi_map;
+    uint8_t padding[64 - sizeof(Bool)];
+
 } EbSvtAv1EncConfiguration;
 
 /**
@@ -910,8 +953,7 @@ EB_API void svt_av1_print_version(void);
      *                  loaded with default params from the library. */
 EB_API EbErrorType svt_av1_enc_init_handle(
     EbComponentType **p_handle, void *p_app_data,
-    EbSvtAv1EncConfiguration
-        *config_ptr); // config_ptr will be loaded with default params from the library
+    EbSvtAv1EncConfiguration *config_ptr); // config_ptr will be loaded with default params from the library
 
 /* STEP 2: Set all configuration parameters.
      *
@@ -920,8 +962,8 @@ EB_API EbErrorType svt_av1_enc_init_handle(
      * @ *pComponentParameterStructure  Encoder and buffer configurations will be copied to the library. */
 EB_API EbErrorType svt_av1_enc_set_parameter(
     EbComponentType *svt_enc_component,
-    EbSvtAv1EncConfiguration *
-        pComponentParameterStructure); // pComponentParameterStructure contents will be copied to the library
+    EbSvtAv1EncConfiguration
+        *pComponentParameterStructure); // pComponentParameterStructure contents will be copied to the library
 
 /* OPTIONAL: Set a single configuration parameter.
      *
@@ -929,8 +971,8 @@ EB_API EbErrorType svt_av1_enc_set_parameter(
      * @ *pComponentParameterStructure  Encoder parameters structure.
      * @ *name                          Null terminated string containing the parameter name
      * @ *value                         Null terminated string containing the parameter value */
-EB_API EbErrorType svt_av1_enc_parse_parameter(
-    EbSvtAv1EncConfiguration *pComponentParameterStructure, const char *name, const char *value);
+EB_API EbErrorType svt_av1_enc_parse_parameter(EbSvtAv1EncConfiguration *pComponentParameterStructure, const char *name,
+                                               const char *value);
 
 /* STEP 3: Initialize encoder and allocates memory to necessary buffers.
      *
@@ -957,8 +999,7 @@ EB_API EbErrorType svt_av1_enc_stream_header_release(EbBufferHeaderType *stream_
      * Parameter:
      * @ *svt_enc_component  Encoder handler.
      * @ *p_buffer           Header pointer, picture buffer. */
-EB_API EbErrorType svt_av1_enc_send_picture(EbComponentType    *svt_enc_component,
-                                            EbBufferHeaderType *p_buffer);
+EB_API EbErrorType svt_av1_enc_send_picture(EbComponentType *svt_enc_component, EbBufferHeaderType *p_buffer);
 
 /* STEP 5: Receive packet.
      * Parameter:
@@ -966,8 +1007,8 @@ EB_API EbErrorType svt_av1_enc_send_picture(EbComponentType    *svt_enc_componen
      * @ **p_buffer          Header pointer to return packet with.
      * @ pic_send_done       Flag to signal that all input pictures have been sent, this call becomes locking one this signal is 1.
      * Non-locking call, returns EB_ErrorMax for an encode error, EB_NoErrorEmptyQueue when the library does not have any available packets.*/
-EB_API EbErrorType svt_av1_enc_get_packet(EbComponentType     *svt_enc_component,
-                                          EbBufferHeaderType **p_buffer, uint8_t pic_send_done);
+EB_API EbErrorType svt_av1_enc_get_packet(EbComponentType *svt_enc_component, EbBufferHeaderType **p_buffer,
+                                          uint8_t pic_send_done);
 
 /* STEP 5-1: Release output buffer back into the pool.
      *
@@ -980,8 +1021,7 @@ EB_API void svt_av1_enc_release_out_buffer(EbBufferHeaderType **p_buffer);
      * Parameter:
      * @ *svt_enc_component  Encoder handler.
      * @ *p_buffer           Output buffer. */
-EB_API EbErrorType svt_av1_get_recon(EbComponentType    *svt_enc_component,
-                                     EbBufferHeaderType *p_buffer);
+EB_API EbErrorType svt_av1_get_recon(EbComponentType *svt_enc_component, EbBufferHeaderType *p_buffer);
 
 /* OPTIONAL: get stream information
      *
@@ -989,8 +1029,7 @@ EB_API EbErrorType svt_av1_get_recon(EbComponentType    *svt_enc_component,
      * @ *svt_enc_component  Encoder handler.
      * @ *stream_info_id SVT_AV1_STREAM_INFO_ID.
      * @ *info         output, the type depends on id */
-EB_API EbErrorType svt_av1_enc_get_stream_info(EbComponentType *svt_enc_component,
-                                               uint32_t stream_info_id, void *info);
+EB_API EbErrorType svt_av1_enc_get_stream_info(EbComponentType *svt_enc_component, uint32_t stream_info_id, void *info);
 
 /* STEP 6: Deinitialize encoder library.
      *

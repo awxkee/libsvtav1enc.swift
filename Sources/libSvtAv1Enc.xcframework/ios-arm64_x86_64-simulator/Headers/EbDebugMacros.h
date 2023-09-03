@@ -20,6 +20,7 @@
 * - bug fixes should be prefixed by FIX_
 * - code refactors should be prefixed by RFCTR_
 * - code cleanups should be prefixed by CLN_
+* - optimizations should be prefixed by OPT_
 * - all macros must have a coherent comment explaining what the MACRO is doing
 * - #if 0 / #if 1 are not to be used
 */
@@ -34,6 +35,7 @@ extern "C" {
 #endif // __cplusplus
 
 //FOR DEBUGGING - Do not remove
+#define OPT_LD_LATENCY2         0 // Latency optimization for low delay
 #define LOG_ENC_DONE            0 // log encoder job one
 #define NO_ENCDEC               0 // bypass encDec to test cmpliance of MD. complained achieved when skip_flag is OFF. Port sample code from VCI-SW_AV1_Candidate1 branch
 #define DEBUG_TPL               0 // Prints to debug TPL
@@ -63,7 +65,9 @@ extern "C" {
 #define DEBUG_SFRAME            0
 // Quantization matrices
 #define DEBUG_QM_LEVEL          0
-
+#define DEBUG_STARTUP_MG_SIZE   0
+#define DEBUG_SEGMENT_QP        0
+#define DEBUG_ROI               0
 #ifdef __cplusplus
 }
 #endif // __cplusplus
